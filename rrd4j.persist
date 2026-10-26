@@ -1,0 +1,11 @@
+// Історія для графіків у sitemap (Chart). rrd4j — компактна кільцева БД.
+Strategies {
+    everyMinute : "0 * * * * ?"
+    default = everyChange
+}
+
+Items {
+    // Графік споживання за останню годину (особлива вимога варіанта 1)
+    Power_Total : strategy = everyChange, everyMinute, restoreOnStartup
+    Temp_Living, Hum_Living, Lux_Level : strategy = everyMinute, restoreOnStartup
+}

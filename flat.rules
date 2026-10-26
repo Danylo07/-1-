@@ -1,0 +1,216 @@
+// =============================================================================
+// Правила автоматизації — Варіант 1: «Енергоощадна розумна квартира»
+//
+//  Правило 1: рух + освітленість < 50 лк -> світло 70 %; без руху 5 хв -> вимкнути.
+//  Правило 2: нікого вдома 30 хв -> «Економ», уставка 17 °C; поява руху -> 21 °C.
+//  Правило 3: потужність > 2500 Вт понад 1 хв -> тривога в UI + вимкнення обігрівача.
+//
+//  Інтервали беруться з Items Cfg_*_Sec. «Демо-режим» (Item Demo_Mode) прискорює їх:
+//     без руху:      300 с  -> 30 с   (5 хв  -> 30 с)
+//     нікого вдома: 1800 с  -> 60 с   (30 хв -> 60 с)
+//     перевантаження: 60 с  -> 15 с   (1 хв  -> 15 с)
+// =============================================================================
+
+// --- Константи порогів -------------------------------------------------------
+val int LUX_DARK     = 50     // лк: темніше за це вважаємо «темно»
+val int LIGHT_AUTO   = 70     // %: яскравість автоматичного світла
+val int POWER_LIMIT  = 2500   // Вт: поріг перевантаження
+val int T_COMFORT    = 21     // °C: комфортна уставка
+val int T_ECO        = 17     // °C: уставка в режимі «Економ»
+
+// --- Таймери (глобальні змінні файлу правил) ----------------------------------
+var Timer tOffLiving  = null
+var Timer tOffBedroom = null
+var Timer tAway       = null
+var Timer tOverload   = null
+
+
+// =============================================================================
+// ІНІЦІАЛІЗАЦІЯ та ДЕМО-РЕЖИМ
+// =============================================================================
+rule "Init: типові інтервали"
+when
+    System started
+then
+    Demo_Mode.postUpdate(OFF)
+    Cfg_NoMotion_Sec.postUpdate(300)
+    Cfg_Away_Sec.postUpdate(1800)
+    Cfg_Overload_Sec.postUpdate(60)
+    Alert_Overload.postUpdate(OFF)
+    Mode_Eco.postUpdate(OFF)
+    logInfo("flat", "Правила завантажено, інтервали: 300/1800/60 с")
+end
+
+rule "Demo: перемикання швидкості таймерів"
+when
+    Item Demo_Mode changed
+then
+    if (Demo_Mode.state == ON) {
+        Cfg_NoMotion_Sec.postUpdate(30)
+        Cfg_Away_Sec.postUpdate(60)
+        Cfg_Overload_Sec.postUpdate(15)
+        logInfo("flat", "ДЕМО-режим ON: інтервали 30/60/15 с")
+    } else {
+        Cfg_NoMotion_Sec.postUpdate(300)
+        Cfg_Away_Sec.postUpdate(1800)
+        Cfg_Overload_Sec.postUpdate(60)
+        logInfo("flat", "ДЕМО-режим OFF: інтервали 300/1800/60 с")
+    }
+end
+
+
+// =============================================================================
+// ПРАВИЛО 1 — освітлення за рухом та освітленістю
+// =============================================================================
+
+// 1а. Є рух і темно -> світло 70 % (лише якщо воно зараз вимкнене, щоб не перебивати ручне керування)
+rule "R1a Вітальня: рух + темно -> світло 70%"
+when
+    Item Motion_Living changed to ON or
+    Item Lux_Level changed
+then
+    if (Motion_Living.state == ON) {
+        // рух є — скасовуємо таймер вимкнення
+        if (tOffLiving !== null) {
+            tOffLiving.cancel()
+            tOffLiving = null
+        }
+        if (Lux_Level.state instanceof Number && Light_Living.state instanceof Number) {
+            val double lux = (Lux_Level.state as Number).doubleValue
+            val int cur = (Light_Living.state as Number).intValue
+            if (lux < LUX_DARK && cur == 0) {
+                logInfo("flat", "R1a: рух у вітальні, {} лк < {} -> світло {} %", lux, LUX_DARK, LIGHT_AUTO)
+                Light_Living.sendCommand(LIGHT_AUTO)
+            }
+        }
+    }
+end
+
+rule "R1a Спальня: рух + темно -> світло 70%"
+when
+    Item Motion_Bedroom changed to ON or
+    Item Lux_Level changed
+then
+    if (Motion_Bedroom.state == ON) {
+        if (tOffBedroom !== null) {
+            tOffBedroom.cancel()
+            tOffBedroom = null
+        }
+        if (Lux_Level.state instanceof Number && Light_Bedroom.state instanceof Number) {
+            val double lux = (Lux_Level.state as Number).doubleValue
+            val int cur = (Light_Bedroom.state as Number).intValue
+            if (lux < LUX_DARK && cur == 0) {
+                logInfo("flat", "R1a: рух у спальні, {} лк < {} -> світло {} %", lux, LUX_DARK, LIGHT_AUTO)
+                Light_Bedroom.sendCommand(LIGHT_AUTO)
+            }
+        }
+    }
+end
+
+// 1б. Руху немає -> через Cfg_NoMotion_Sec (5 хв) вимкнути світло
+rule "R1b Вітальня: немає руху -> вимкнути"
+when
+    Item Motion_Living changed to OFF
+then
+    if (tOffLiving !== null) {
+        tOffLiving.cancel()
+    }
+    val int sec = if (Cfg_NoMotion_Sec.state instanceof Number) (Cfg_NoMotion_Sec.state as Number).intValue else 300
+    tOffLiving = createTimer(now.plusSeconds(sec), [|
+        logInfo("flat", "R1b: у вітальні немає руху {} с -> світло OFF", sec)
+        Light_Living.sendCommand(0)
+        tOffLiving = null
+    ])
+end
+
+rule "R1b Спальня: немає руху -> вимкнути"
+when
+    Item Motion_Bedroom changed to OFF
+then
+    if (tOffBedroom !== null) {
+        tOffBedroom.cancel()
+    }
+    val int sec = if (Cfg_NoMotion_Sec.state instanceof Number) (Cfg_NoMotion_Sec.state as Number).intValue else 300
+    tOffBedroom = createTimer(now.plusSeconds(sec), [|
+        logInfo("flat", "R1b: у спальні немає руху {} с -> світло OFF", sec)
+        Light_Bedroom.sendCommand(0)
+        tOffBedroom = null
+    ])
+end
+
+
+// =============================================================================
+// ПРАВИЛО 2 — режим «Економ», коли нікого немає вдома
+// =============================================================================
+
+// 2а. Обидва датчики «0» -> запускаємо відлік Cfg_Away_Sec (30 хв)
+rule "R2a Нікого вдома -> відлік до Економ"
+when
+    Item Motion_Living changed to OFF or
+    Item Motion_Bedroom changed to OFF
+then
+    if (Motion_Living.state == OFF && Motion_Bedroom.state == OFF && tAway === null && Mode_Eco.state != ON) {
+        val int sec = if (Cfg_Away_Sec.state instanceof Number) (Cfg_Away_Sec.state as Number).intValue else 1800
+        logInfo("flat", "R2a: нікого вдома, відлік {} с до режиму Економ", sec)
+        tAway = createTimer(now.plusSeconds(sec), [|
+            logInfo("flat", "R2a: {} с без руху -> режим Економ, уставка {} °C", sec, T_ECO)
+            Mode_Eco.postUpdate(ON)
+            Heater_Setpoint.sendCommand(T_ECO)
+            tAway = null
+        ])
+    }
+end
+
+// 2б. З'явився рух -> скасувати відлік; якщо був «Економ» — повернути комфорт 21 °C
+rule "R2b З'явився рух -> комфорт"
+when
+    Item Motion_Living changed to ON or
+    Item Motion_Bedroom changed to ON
+then
+    if (tAway !== null) {
+        tAway.cancel()
+        tAway = null
+        logInfo("flat", "R2b: рух з'явився, відлік до Економ скасовано")
+    }
+    if (Mode_Eco.state == ON) {
+        logInfo("flat", "R2b: повернення -> режим Комфорт, уставка {} °C", T_COMFORT)
+        Mode_Eco.postUpdate(OFF)
+        Heater_Setpoint.sendCommand(T_COMFORT)
+    }
+end
+
+
+// =============================================================================
+// ПРАВИЛО 3 — перевантаження мережі
+// =============================================================================
+// Потужність має бути > 2500 Вт БЕЗПЕРЕРВНО Cfg_Overload_Sec (1 хв): будь-яке падіння
+// нижче порога скасовує таймер. Тривога «залипає» (latched), доки користувач її не скине.
+rule "R3 Перевантаження мережі"
+when
+    Item Power_Total changed
+then
+    if (Power_Total.state instanceof Number) {
+        val double p = (Power_Total.state as Number).doubleValue
+        if (p > POWER_LIMIT) {
+            if (tOverload === null && Alert_Overload.state != ON) {
+                val int sec = if (Cfg_Overload_Sec.state instanceof Number) (Cfg_Overload_Sec.state as Number).intValue else 60
+                logInfo("flat", "R3: {} Вт > {} Вт, відлік {} с", p, POWER_LIMIT, sec)
+                tOverload = createTimer(now.plusSeconds(sec), [|
+                    if (Power_Total.state instanceof Number && (Power_Total.state as Number).doubleValue > POWER_LIMIT) {
+                        logWarn("flat", "R3: ПЕРЕВАНТАЖЕННЯ {} Вт — вимикаю обігрівач", Power_Total.state)
+                        Heater_Power.sendCommand(OFF)
+                        Alert_Message.postUpdate("Перевантаження: " + Power_Total.state + " Вт > " + POWER_LIMIT + " Вт понад " + sec + " с. Обігрівач вимкнено.")
+                        Alert_Overload.postUpdate(ON)
+                    }
+                    tOverload = null
+                ])
+            }
+        } else {
+            if (tOverload !== null) {
+                tOverload.cancel()
+                tOverload = null
+                logInfo("flat", "R3: потужність нормалізувалась ({} Вт), відлік скасовано", p)
+            }
+        }
+    }
+end

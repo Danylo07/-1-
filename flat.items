@@ -1,0 +1,41 @@
+// Items «Розумна квартира». Канали: mqtt:topic:mosquitto:<thing>:<channel>
+Group gSensors  "Сенсори"
+Group gActuators "Актуатори"
+Group gStatus   "Статуси пристроїв"
+
+// --- Сенсори ---------------------------------------------------------------
+Switch Motion_Living  "Рух, вітальня [%s]"  <motion>      (gSensors) { channel="mqtt:topic:mosquitto:motion_living:value" }
+Switch Motion_Bedroom "Рух, спальня [%s]"   <motion>      (gSensors) { channel="mqtt:topic:mosquitto:motion_bedroom:value" }
+Number Temp_Living    "Температура [%.1f °C]" <temperature> (gSensors) { channel="mqtt:topic:mosquitto:temperature:value" }
+Number Hum_Living     "Вологість [%.1f %%]"  <humidity>    (gSensors) { channel="mqtt:topic:mosquitto:humidity:value" }
+Number Lux_Level      "Освітленість [%d лк]" <light>       (gSensors) { channel="mqtt:topic:mosquitto:lux:value" }
+Number Power_Total    "Потужність [%d Вт]"   <energy>      (gSensors) { channel="mqtt:topic:mosquitto:power:value" }
+
+// --- Актуатори -------------------------------------------------------------
+Number Light_Living   "Світло, вітальня [%d %%]" <light>   (gActuators) { channel="mqtt:topic:mosquitto:light_living:brightness" }
+Number Light_Bedroom  "Світло, спальня [%d %%]"  <light>   (gActuators) { channel="mqtt:topic:mosquitto:light_bedroom:brightness" }
+Switch Heater_Power   "Обігрівач [%s]"           <heating> (gActuators) { channel="mqtt:topic:mosquitto:heater:power" }
+Number Heater_Setpoint "Уставка [%.0f °C]"       <temperature> (gActuators) { channel="mqtt:topic:mosquitto:heater:setpoint" }
+Switch Heater_Heating "Нагрів триває [%s]"       <heating> (gActuators) { channel="mqtt:topic:mosquitto:heater:heating" }
+
+// --- Статуси пристроїв (online/offline, retain + Last Will) ----------------
+String Status_MotionLiving      "Статус motion_living [%s]" (gStatus) { channel="mqtt:topic:mosquitto:motion_living:status" }
+String Status_MotionBedroom     "Статус motion_bedroom [%s]" (gStatus) { channel="mqtt:topic:mosquitto:motion_bedroom:status" }
+String Status_Temperature       "Статус temperature [%s]" (gStatus) { channel="mqtt:topic:mosquitto:temperature:status" }
+String Status_Humidity          "Статус humidity [%s]" (gStatus) { channel="mqtt:topic:mosquitto:humidity:status" }
+String Status_Lux               "Статус lux [%s]" (gStatus) { channel="mqtt:topic:mosquitto:lux:status" }
+String Status_Power             "Статус power [%s]" (gStatus) { channel="mqtt:topic:mosquitto:power:status" }
+String Status_LightLiving       "Статус light_living [%s]" (gStatus) { channel="mqtt:topic:mosquitto:light_living:status" }
+String Status_LightBedroom      "Статус light_bedroom [%s]" (gStatus) { channel="mqtt:topic:mosquitto:light_bedroom:status" }
+String Status_Heater            "Статус heater [%s]" (gStatus) { channel="mqtt:topic:mosquitto:heater:status" }
+
+// --- Логіка автоматизації (без каналів; керуються правилами) --------------
+Switch Mode_Eco       "Режим «Економ» [%s]"   <energy>
+Switch Alert_Overload "ТРИВОГА: перевантаження [%s]" <alarm>
+String Alert_Message  "Повідомлення [%s]"
+
+// --- Налаштування таймерів (задаються правилом init/demo) -----------------
+Switch Demo_Mode        "Демо-режим (таймери швидші) [%s]"
+Number Cfg_NoMotion_Sec "Без руху -> вимкнути світло [%d с]"
+Number Cfg_Away_Sec     "Нікого вдома -> «Економ» [%d с]"
+Number Cfg_Overload_Sec "Перевантаження триває -> тривога [%d с]"

@@ -1,0 +1,90 @@
+// ШАБЛОН Things. Контейнер openhab-setup підставляє пароль із .env і кладе результат у
+// openhab/conf/things/mqtt.things (цей файл в .gitignore — пароль у git не потрапляє).
+//
+// Брокер: TLS 8883, hostnameValidated=true (імʼя "mosquitto" є в SAN сертифіката),
+// окремий користувач "openhab" з ACL: читає telemetry/state/status, пише лише .../set.
+// qos=1: підписки та команди openHAB ідуть із QoS 1 (телеметрію пристрої публікують із QoS 0,
+// тож фактично вона доставляється з QoS 0, а команди — гарантовано хоча б раз).
+Bridge mqtt:broker:mosquitto "Mosquitto (TLS + ACL)" [
+    host="mosquitto",
+    port=8883,
+    secure=true,
+    hostnameValidated=true,
+    username="openhab",
+    password="@OPENHAB_MQTT_PASSWORD@",
+    clientID="openhab-flat",
+    qos=1,
+    keepAlive=30,
+    reconnectTime=3000
+] {
+
+    Thing topic motion_living "Рух (вітальня)" @ "Вітальня" [ availabilityTopic="flat/livingroom/motion/status", payloadAvailable="online", payloadNotAvailable="offline" ] {
+        Channels:
+            Type switch : value "Рух (вітальня)" [ stateTopic="flat/livingroom/motion/telemetry", transformationPattern="JSONPATH:$.value", on="1", off="0" ]
+            Type string : status "Статус пристрою" [ stateTopic="flat/livingroom/motion/status" ]
+    }
+
+    Thing topic motion_bedroom "Рух (спальня)" @ "Спальня" [ availabilityTopic="flat/bedroom/motion/status", payloadAvailable="online", payloadNotAvailable="offline" ] {
+        Channels:
+            Type switch : value "Рух (спальня)" [ stateTopic="flat/bedroom/motion/telemetry", transformationPattern="JSONPATH:$.value", on="1", off="0" ]
+            Type string : status "Статус пристрою" [ stateTopic="flat/bedroom/motion/status" ]
+    }
+
+    Thing topic temperature "Температура (вітальня)" @ "Вітальня" [ availabilityTopic="flat/livingroom/temperature/status", payloadAvailable="online", payloadNotAvailable="offline" ] {
+        Channels:
+            Type number : value "Температура (вітальня)" [ stateTopic="flat/livingroom/temperature/telemetry", transformationPattern="JSONPATH:$.value" ]
+            Type string : status "Статус пристрою" [ stateTopic="flat/livingroom/temperature/status" ]
+    }
+
+    Thing topic humidity "Вологість (вітальня)" @ "Вітальня" [ availabilityTopic="flat/livingroom/humidity/status", payloadAvailable="online", payloadNotAvailable="offline" ] {
+        Channels:
+            Type number : value "Вологість (вітальня)" [ stateTopic="flat/livingroom/humidity/telemetry", transformationPattern="JSONPATH:$.value" ]
+            Type string : status "Статус пристрою" [ stateTopic="flat/livingroom/humidity/status" ]
+    }
+
+    Thing topic lux "Освітленість (коридор)" @ "Коридор" [ availabilityTopic="flat/hallway/lux/status", payloadAvailable="online", payloadNotAvailable="offline" ] {
+        Channels:
+            Type number : value "Освітленість (коридор)" [ stateTopic="flat/hallway/lux/telemetry", transformationPattern="JSONPATH:$.value" ]
+            Type string : status "Статус пристрою" [ stateTopic="flat/hallway/lux/status" ]
+    }
+
+    Thing topic power "Лічильник потужності" @ "Коридор" [ availabilityTopic="flat/hallway/power/status", payloadAvailable="online", payloadNotAvailable="offline" ] {
+        Channels:
+            Type number : value "Лічильник потужності" [ stateTopic="flat/hallway/power/telemetry", transformationPattern="JSONPATH:$.value" ]
+            Type string : status "Статус пристрою" [ stateTopic="flat/hallway/power/status" ]
+    }
+
+    Thing topic light_living "Світло (вітальня)" @ "Вітальня" [ availabilityTopic="flat/livingroom/light/status", payloadAvailable="online", payloadNotAvailable="offline" ] {
+        Channels:
+            Type number : brightness "Яскравість 0–100 %" [
+                stateTopic="flat/livingroom/light/state", transformationPattern="JSONPATH:$.brightness",
+                commandTopic="flat/livingroom/light/set", formatBeforePublish="{\"brightness\":%s}",
+                min=0, max=100 ]
+            Type string : status "Статус пристрою" [ stateTopic="flat/livingroom/light/status" ]
+    }
+
+    Thing topic light_bedroom "Світло (спальня)" @ "Спальня" [ availabilityTopic="flat/bedroom/light/status", payloadAvailable="online", payloadNotAvailable="offline" ] {
+        Channels:
+            Type number : brightness "Яскравість 0–100 %" [
+                stateTopic="flat/bedroom/light/state", transformationPattern="JSONPATH:$.brightness",
+                commandTopic="flat/bedroom/light/set", formatBeforePublish="{\"brightness\":%s}",
+                min=0, max=100 ]
+            Type string : status "Статус пристрою" [ stateTopic="flat/bedroom/light/status" ]
+    }
+
+    Thing topic heater "Обігрівач (вітальня)" @ "Вітальня" [ availabilityTopic="flat/livingroom/heater/status", payloadAvailable="online", payloadNotAvailable="offline" ] {
+        Channels:
+            Type switch : power "Живлення" [
+                stateTopic="flat/livingroom/heater/state", transformationPattern="JSONPATH:$.state",
+                commandTopic="flat/livingroom/heater/set", formatBeforePublish="{\"state\":\"%s\"}",
+                on="ON", off="OFF" ]
+            Type number : setpoint "Уставка, °C" [
+                stateTopic="flat/livingroom/heater/state", transformationPattern="JSONPATH:$.setpoint",
+                commandTopic="flat/livingroom/heater/set", formatBeforePublish="{\"setpoint\":%s}",
+                min=5, max=30 ]
+            Type switch : heating "Нагрів триває" [
+                stateTopic="flat/livingroom/heater/state", transformationPattern="JSONPATH:$.heating",
+                on="true", off="false" ]
+            Type string : status "Статус пристрою" [ stateTopic="flat/livingroom/heater/status" ]
+    }
+}

@@ -1,0 +1,60 @@
+# ACL Mosquitto — принцип найменших привілеїв.
+# Формат: user <ім'я> ; topic [read|write|readwrite] <тема>
+# Усе, що явно не дозволено, ЗАБОРОНЕНО (deny by default).
+#
+# Автентифікація (хто ти?) — password_file; авторизація (що тобі можна?) — цей файл.
+
+# --- Адміністратор: повний доступ до дерева квартири + системні метрики брокера
+user admin
+topic readwrite flat/#
+topic read $SYS/#
+
+# --- openHAB: читає все, що публікують пристрої; пише ЛИШЕ команди .../set
+user openhab
+topic read flat/+/+/telemetry
+topic read flat/+/+/state
+topic read flat/+/+/status
+topic write flat/+/+/set
+
+# --- Сенсори: пишуть ЛИШЕ свою телеметрію та свій статус (Last Will теж). Нічого не читають.
+
+user dev_motion_living
+topic write flat/livingroom/motion/telemetry
+topic write flat/livingroom/motion/status
+
+user dev_motion_bedroom
+topic write flat/bedroom/motion/telemetry
+topic write flat/bedroom/motion/status
+
+user dev_temperature
+topic write flat/livingroom/temperature/telemetry
+topic write flat/livingroom/temperature/status
+
+user dev_humidity
+topic write flat/livingroom/humidity/telemetry
+topic write flat/livingroom/humidity/status
+
+user dev_lux
+topic write flat/hallway/lux/telemetry
+topic write flat/hallway/lux/status
+
+user dev_power
+topic write flat/hallway/power/telemetry
+topic write flat/hallway/power/status
+
+# --- Актуатори: читають ЛИШЕ свій .../set; пишуть свій .../state та .../status
+
+user dev_light_living
+topic read flat/livingroom/light/set
+topic write flat/livingroom/light/state
+topic write flat/livingroom/light/status
+
+user dev_light_bedroom
+topic read flat/bedroom/light/set
+topic write flat/bedroom/light/state
+topic write flat/bedroom/light/status
+
+user dev_heater
+topic read flat/livingroom/heater/set
+topic write flat/livingroom/heater/state
+topic write flat/livingroom/heater/status

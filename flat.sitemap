@@ -1,0 +1,50 @@
+sitemap flat label="Розумна квартира" {
+
+    Frame label="Тривоги та режим" {
+        Text item=Alert_Overload label="Перевантаження мережі [%s]" icon="alarm" valuecolor=[ON="red", OFF="green", NULL="gray"]
+        Text item=Alert_Message visibility=[Alert_Overload==ON] labelcolor=[Alert_Overload==ON="red"]
+        Switch item=Alert_Overload label="Підтвердити / скинути тривогу"
+        Text item=Mode_Eco label="Режим «Економ» [%s]" icon="energy" valuecolor=[ON="orange", OFF="green"]
+    }
+
+    Frame label="Сенсори" {
+        Text item=Motion_Living  valuecolor=[ON="green", OFF="gray"]
+        Text item=Motion_Bedroom valuecolor=[ON="green", OFF="gray"]
+        Text item=Temp_Living
+        Text item=Hum_Living
+        Text item=Lux_Level
+        Text item=Power_Total valuecolor=[>2500="red", >1500="orange", <=1500="green"]
+    }
+
+    Frame label="Керування" {
+        Switch item=Light_Living  label="Світло, вітальня [%d %%]" mappings=[0="Вимк", 30="30%", 70="70%", 100="100%"]
+        Switch item=Light_Bedroom label="Світло, спальня [%d %%]"  mappings=[0="Вимк", 30="30%", 70="70%", 100="100%"]
+        Switch item=Heater_Power  label="Обігрівач"
+        Setpoint item=Heater_Setpoint minValue=5 maxValue=30 step=1
+        Text item=Heater_Heating
+    }
+
+    Frame label="Графіки (остання година)" {
+        Chart item=Power_Total service="rrd4j" period=h refresh=30000 label="Споживання потужності, Вт"
+        Chart item=Temp_Living service="rrd4j" period=h refresh=30000 label="Температура, °C"
+    }
+
+    Frame label="Демо та таймери правил" {
+        Switch item=Demo_Mode
+        Text item=Cfg_NoMotion_Sec
+        Text item=Cfg_Away_Sec
+        Text item=Cfg_Overload_Sec
+    }
+
+    Frame label="Статуси пристроїв (online / offline)" {
+        Text item=Status_MotionLiving
+        Text item=Status_MotionBedroom
+        Text item=Status_Temperature
+        Text item=Status_Humidity
+        Text item=Status_Lux
+        Text item=Status_Power
+        Text item=Status_LightLiving
+        Text item=Status_LightBedroom
+        Text item=Status_Heater
+    }
+}

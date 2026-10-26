@@ -1,0 +1,13 @@
+# Секрети та згенеровані файли — НЕ комітити
+.env
+certs/*.key
+certs/*.crt
+certs/*.csr
+certs/*.srl
+certs/*.cnf
+*.p12
+*.jks
+# openHAB: файл Things генерується з шаблону (містить пароль)
+openhab/conf/things/mqtt.things
+__pycache__/
+*.pyc

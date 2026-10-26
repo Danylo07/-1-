@@ -1,0 +1,83 @@
+# Енергоощадна розумна квартира: simulator -> Mosquitto (TLS+ACL) -> openHAB
+# Запуск: ./scripts/init.sh  (один раз)  ->  docker compose up -d
+
+services:
+  # --- Мережевий рівень: захищений MQTT-брокер ------------------------------
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    container_name: iot-mosquitto
+    restart: unless-stopped
+    entrypoint: ["/entrypoint.sh"]
+    command: ["/usr/sbin/mosquitto", "-c", "/mosquitto/config/mosquitto.conf"]
+    env_file: .env
+    ports:
+      - "127.0.0.1:8883:8883"          # лише TLS і лише з localhost; 1883 не відкрито взагалі
+    volumes:
+      - ./mosquitto/entrypoint.sh:/entrypoint.sh:ro
+      - ./mosquitto/config:/mosquitto/config:ro
+      - ./certs/ca.crt:/certs/ca.crt:ro            # ca.key у контейнер НЕ монтується
+      - ./certs/server.crt:/certs/server.crt:ro
+      - ./certs/server.key:/certs/server.key:ro
+      - mosquitto_data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 8883 --cafile /mosquitto/tls/ca.crt -u admin -P \"$$MQTT_ADMIN_PASSWORD\" -t '$$SYS/broker/uptime' -C 1 -W 3 >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 3s
+
+  # --- Рівень сприйняття: симулятори сенсорів і актуаторів ------------------
+  simulator:
+    build: ./simulator
+    container_name: iot-simulator
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "8883"
+      MQTT_CA: /certs/ca.crt
+    volumes:
+      - ./certs/ca.crt:/certs/ca.crt:ro
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
+  # --- Одноразова підготовка openHAB: truststore з нашим CA + Things з паролем --
+  openhab-setup:
+    image: openhab/openhab:4.3.0
+    container_name: iot-openhab-setup
+    entrypoint: ["sh", "/setup.sh"]
+    env_file: .env
+    volumes:
+      - ./scripts/setup-openhab.sh:/setup.sh:ro
+      - ./openhab/templates:/templates:ro
+      - ./openhab/conf:/conf
+      - ./certs/ca.crt:/ca.crt:ro
+      - tls_trust:/trust
+    restart: "no"
+
+  # --- Рівень обробки та застосунків: openHAB -------------------------------
+  openhab:
+    image: openhab/openhab:4.3.0
+    container_name: iot-openhab
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      TZ: ${TZ:-Europe/Kyiv}
+      # JVM довіряє нашому CA (truststore = стандартні CA + iot-mc1-ca)
+      EXTRA_JAVA_OPTS: "-Djavax.net.ssl.trustStore=/trust/truststore.jks -Djavax.net.ssl.trustStorePassword=changeit"
+    volumes:
+      - ./openhab/conf:/openhab/conf
+      - openhab_userdata:/openhab/userdata
+      - tls_trust:/trust:ro
+    depends_on:
+      openhab-setup:
+        condition: service_completed_successfully
+      mosquitto:
+        condition: service_healthy
+
+volumes:
+  mosquitto_data:
+  openhab_userdata:
+  tls_trust:
